@@ -27,7 +27,7 @@ const checkConfig = (config: any): config is Config => {
 const loadConfig = () => {
     const configPath = path.resolve(dataDir, 'config.yml');
     if (!fs.existsSync(configPath)) {
-        console.log('\x1B[31mConfig file does not exist, try regenerate with pnpm install\x1B[0m');
+        console.log('\x1B[31mConfig file does not exist, try regenerate with pnpm build\x1B[0m');
         exit(-1);
     }
     try {
@@ -37,7 +37,7 @@ const loadConfig = () => {
         }
         return config;
     } catch (e) {
-        console.log('\x1B[31mBroken config, try delete config.yml and regenerate with pnpm install\n\x1B[0m');
+        console.log('\x1B[31mBroken config, try delete config.yml and regenerate with pnpm build\n\x1B[0m');
         exit(-1);
     }
 };
