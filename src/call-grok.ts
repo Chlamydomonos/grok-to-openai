@@ -97,14 +97,31 @@ export const callGrok = async (req: Request, res: Response) => {
 
     let resStarted = false;
 
+    // 使用Buffer类型缓冲区
+    let buffer = Buffer.alloc(0);
+
     stream.on('data', (chunk: Buffer) => {
-        for (const line of chunk.toString().split('\n')) {
+        // 将新chunk追加到缓冲区
+        buffer = Buffer.concat([buffer, chunk]);
+
+        // 循环查找换行符位置（0x0A是换行符的十六进制表示）
+        let newlineIndex;
+        while ((newlineIndex = buffer.indexOf(0x0a)) !== -1) {
+            // 提取完整行（包含换行符）
+            const lineBuffer = buffer.subarray(0, newlineIndex + 1);
+            // 保留剩余数据
+            buffer = buffer.subarray(newlineIndex + 1);
+
             try {
+                // 转换为字符串（此时确保是完整UTF-8序列）
+                const line = lineBuffer.toString('utf-8').trim();
+                if (!line) continue;
+
                 const jsonObj = JSON.parse(line);
                 if (!resStarted) {
-                    if (jsonObj.error && jsonObj.error.code) {
+                    if (jsonObj.error?.code) {
                         const code = jsonObj.error.code;
-                        if (code == 16 || code == 3) {
+                        if (code === 16 || code === 3) {
                             console.log('\x1B[31mThis cookie is invalid\x1B[0m');
                         } else {
                             console.log('\x1B[31mUnknown error:\x1B[0m');
@@ -113,11 +130,12 @@ export const callGrok = async (req: Request, res: Response) => {
                     }
                 }
 
-                if (jsonObj.result && jsonObj.result.response && jsonObj.result.response.token) {
+                if (jsonObj.result?.response?.token) {
                     resStarted = true;
                     res.write(`data: ${JSON.stringify(openaiToken(jsonObj.result.response.token))}\n\n`);
                 }
             } catch (e) {
+                // 可以选择记录错误日志
                 continue;
             }
         }
