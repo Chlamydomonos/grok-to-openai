@@ -5,25 +5,14 @@ import yaml from 'yaml';
 import { dataDir } from './data-dir';
 
 interface Config {
-    channel: string;
-    headless: boolean;
     port: number;
-    maxTimeout: number;
 }
 
 const checkConfig = (config: any): config is Config => {
-    if (config.channel === undefined) {
-        return false;
-    }
-    if (config.headless === undefined) {
-        return false;
-    }
     if (config.port === undefined) {
         return false;
     }
-    if (config.maxTimeout === undefined) {
-        return false;
-    }
+
     return true;
 };
 
