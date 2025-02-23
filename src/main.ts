@@ -5,7 +5,7 @@ import { callGrok } from './call-grok';
 console.log("\n\n\x1B[1m\x1B[32mChlamydomonos' Grok-to-OpenAI Proxy\x1B[0m\n\n");
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
 
 app.get('/v1/models', (_, res) => {
     res.send({ data: [{ id: 'grok-3' }] });
