@@ -11,7 +11,13 @@ app.get('/v1/models', (_, res) => {
     res.send({ data: [{ id: 'grok-3' }] });
 });
 
-app.post('/v1/chat/completions', callGrok);
+app.post('/v1/chat/completions', async (req, res) => {
+    try {
+        await callGrok(req, res);
+    } catch (e) {
+        console.log(e);
+    }
+});
 
 app.listen(config.port, () => {
     console.log(`\n\x1B[37m\x1B[1mServer listening on ${config.port}\x1B[0m\n`);
