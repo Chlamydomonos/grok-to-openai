@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import chokidar from 'chokidar';
 import { dataDir } from './data-dir';
+import { config } from './config';
 
 class CookiePool<T> {
     private remainingQuotas: Record<string, number>;
@@ -107,7 +108,7 @@ export interface NamedCookie {
 
 export const createCookiePool = () => {
     const cookieDir = path.resolve(dataDir, 'cookies');
-    const pool = new CookiePool<NamedCookie>();
+    const pool = new CookiePool<NamedCookie>({}, config.cookieQuota, config.quotaRefreshTime);
     chokidar.watch(cookieDir).on('all', (event, fullPath) => {
         const fileName = path.basename(fullPath);
         const matchTxt = /^(.+)\.txt$/.exec(fileName);

@@ -6,10 +6,18 @@ import { dataDir } from './data-dir';
 
 interface Config {
     port: number;
+    cookieQuota: number;
+    quotaRefreshTime: number;
 }
 
 const checkConfig = (config: any): config is Config => {
     if (config.port === undefined) {
+        return false;
+    }
+    if (config.cookieQuota === undefined) {
+        return false;
+    }
+    if (config.quotaRefreshTime === undefined) {
         return false;
     }
 
