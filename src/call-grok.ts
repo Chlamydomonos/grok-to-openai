@@ -1,8 +1,16 @@
 import axios from 'axios';
 import type { Request, Response } from 'express';
 import { createCookiePool, type NamedCookie } from './cookie-pool';
+import { HttpsProxyAgent } from 'https-proxy-agent';
+import { config } from './config';
 
 const grokUrl = 'https://grok.com/rest/app-chat/conversations/new';
+
+const axiosInstance = config.useHttpProxy
+    ? axios.create({
+          httpsAgent: new HttpsProxyAgent(config.httpProxyUrl),
+      })
+    : axios;
 
 const cookiePool = createCookiePool();
 
@@ -86,7 +94,7 @@ export const callGrok = async (req: Request, res: Response, state: { resStarted:
     res.on('close', () => {
         abortController.abort();
     });
-    const axiosResponse = await axios.post(grokUrl, grokBody(req), {
+    const axiosResponse = await axiosInstance.post(grokUrl, grokBody(req), {
         headers: { Cookie: cookie.cookie },
         responseType: 'stream',
         signal: abortController.signal,

@@ -1,3 +1,5 @@
 port: 3000 # 反代端口
 cookieQuota: 15 # 每个cookie的配额限制
 quotaRefreshTime: 7200000 # 配额恢复时间（单位为毫秒）
+# useHttpProxy: true # 使用HTTP代理
+# httpProxyUrl: http://localhost:7890 # HTTP代理URL

@@ -4,11 +4,19 @@ import { exit } from 'process';
 import yaml from 'yaml';
 import { dataDir } from './data-dir';
 
-interface Config {
+type Config = {
     port: number;
     cookieQuota: number;
     quotaRefreshTime: number;
-}
+} & (
+    | {
+          useHttpProxy: true;
+          httpProxyUrl: string;
+      }
+    | {
+          useHttpProxy?: false;
+      }
+);
 
 const checkConfig = (config: any): config is Config => {
     if (config.port === undefined) {
@@ -18,6 +26,9 @@ const checkConfig = (config: any): config is Config => {
         return false;
     }
     if (config.quotaRefreshTime === undefined) {
+        return false;
+    }
+    if (config.useHttpProxy && config.httpProxyUrl === undefined) {
         return false;
     }
 
