@@ -37,7 +37,7 @@ const grokBody = (req: Request) => {
 
 const openaiToken = (token: string) => ({ choices: [{ delta: { role: 'assistant', content: token } }] });
 
-export const callGrok = async (req: Request, res: Response) => {
+export const callGrok = async (req: Request, res: Response, state: { resStarted: boolean }) => {
     console.log(`\n\x1B[36m[${new Date().toLocaleString()}] Request received\x1B[0m`);
 
     const authorization = req.headers.authorization;
@@ -76,6 +76,7 @@ export const callGrok = async (req: Request, res: Response) => {
 
     if (!cookie) {
         res.status(429).send('Cookie已超出限额');
+        state.resStarted = true;
         return;
     }
 
@@ -94,8 +95,6 @@ export const callGrok = async (req: Request, res: Response) => {
     const stream = axiosResponse.data;
 
     console.log('\x1B[2mStreaming response...\x1B[0m');
-
-    let resStarted = false;
 
     // 使用Buffer类型缓冲区
     let buffer = Buffer.alloc(0);
@@ -118,7 +117,7 @@ export const callGrok = async (req: Request, res: Response) => {
                 if (!line) continue;
 
                 const jsonObj = JSON.parse(line);
-                if (!resStarted) {
+                if (!state.resStarted) {
                     if (jsonObj.error?.code) {
                         const code = jsonObj.error.code;
                         if (code === 16 || code === 3) {
@@ -127,11 +126,15 @@ export const callGrok = async (req: Request, res: Response) => {
                             console.log('\x1B[31mUnknown error:\x1B[0m');
                             console.log(`\x1B[31m${line}\x1B[0m`);
                         }
+
+                        res.status(500).send('Internal error');
+                        state.resStarted = true;
+                        return;
                     }
                 }
 
                 if (jsonObj.result?.response?.token) {
-                    resStarted = true;
+                    state.resStarted = true;
                     res.write(`data: ${JSON.stringify(openaiToken(jsonObj.result.response.token))}\n\n`);
                 }
             } catch (e) {

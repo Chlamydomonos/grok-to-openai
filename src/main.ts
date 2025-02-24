@@ -12,10 +12,16 @@ app.get('/v1/models', (_, res) => {
 });
 
 app.post('/v1/chat/completions', async (req, res) => {
+    const state = { resStarted: false };
     try {
-        await callGrok(req, res);
+        await callGrok(req, res, state);
     } catch (e) {
         console.log(e);
+        if (!state.resStarted) {
+            res.status(500).send('Internal error');
+        } else {
+            res.end();
+        }
     }
 });
 
