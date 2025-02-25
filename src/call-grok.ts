@@ -45,6 +45,72 @@ const grokBody = (req: Request) => {
 
 const openaiToken = (token: string) => ({ choices: [{ delta: { role: 'assistant', content: token } }] });
 
+type Writeable = {
+    write: (content: string) => void;
+    end: () => void;
+    on: (event: 'close', handler: () => void) => void;
+    error: (code: number, msg: string) => void;
+};
+
+const callGrokToStream = async (cookie: string, req: Request, res: Writeable) => {
+    const abortController = new AbortController();
+    res.on('close', () => {
+        console.log('\x1B[2mRequest is aborted by user\x1B[0m');
+        abortController.abort();
+    });
+    const axiosResponse = await axiosInstance.post(grokUrl, grokBody(req), {
+        headers: { Cookie: cookie },
+        responseType: 'stream',
+        signal: abortController.signal,
+    });
+
+    const stream = axiosResponse.data;
+
+    console.log('\x1B[2mStreaming response...\x1B[0m');
+
+    let buffer = Buffer.alloc(0);
+
+    stream.on('data', (chunk: Buffer) => {
+        buffer = Buffer.concat([buffer, chunk]);
+
+        let newlineIndex;
+        while ((newlineIndex = buffer.indexOf(0x0a)) !== -1) {
+            const lineBuffer = buffer.subarray(0, newlineIndex + 1);
+            buffer = buffer.subarray(newlineIndex + 1);
+
+            try {
+                const line = lineBuffer.toString('utf-8').trim();
+                if (!line) continue;
+
+                const jsonObj = JSON.parse(line);
+                if (jsonObj.error?.code) {
+                    const code = jsonObj.error.code;
+                    if (code === 16 || code === 3) {
+                        console.log('\x1B[31mThis cookie is invalid\x1B[0m');
+                    } else {
+                        console.log('\x1B[31mUnknown error:\x1B[0m');
+                        console.log(`\x1B[31m${line}\x1B[0m`);
+                    }
+
+                    res.error(500, 'Internal error');
+                    return;
+                }
+
+                if (jsonObj.result?.response?.token) {
+                    res.write(jsonObj.result.response.token);
+                }
+            } catch (e) {
+                continue;
+            }
+        }
+    });
+
+    stream.on('end', () => {
+        console.log('\x1B[2mStream response finished\x1B[0m');
+        res.end();
+    });
+};
+
 export const callGrok = async (req: Request, res: Response, state: { resStarted: boolean }) => {
     console.log(`\n\x1B[36m[${new Date().toLocaleString()}] Request received\x1B[0m`);
 
@@ -90,71 +156,51 @@ export const callGrok = async (req: Request, res: Response, state: { resStarted:
 
     console.log(`\x1B[32mUsing cookie \x1B[36m"${cookie.name}"\x1B[0m`);
 
-    const abortController = new AbortController();
-    res.on('close', () => {
-        abortController.abort();
-    });
-    const axiosResponse = await axiosInstance.post(grokUrl, grokBody(req), {
-        headers: { Cookie: cookie.cookie },
-        responseType: 'stream',
-        signal: abortController.signal,
-    });
-
-    const stream = axiosResponse.data;
-
-    console.log('\x1B[2mStreaming response...\x1B[0m');
-
-    // 使用Buffer类型缓冲区
-    let buffer = Buffer.alloc(0);
-
-    stream.on('data', (chunk: Buffer) => {
-        // 将新chunk追加到缓冲区
-        buffer = Buffer.concat([buffer, chunk]);
-
-        // 循环查找换行符位置（0x0A是换行符的十六进制表示）
-        let newlineIndex;
-        while ((newlineIndex = buffer.indexOf(0x0a)) !== -1) {
-            // 提取完整行（包含换行符）
-            const lineBuffer = buffer.subarray(0, newlineIndex + 1);
-            // 保留剩余数据
-            buffer = buffer.subarray(newlineIndex + 1);
-
-            try {
-                // 转换为字符串（此时确保是完整UTF-8序列）
-                const line = lineBuffer.toString('utf-8').trim();
-                if (!line) continue;
-
-                const jsonObj = JSON.parse(line);
+    if (req.body.stream) {
+        callGrokToStream(cookie.cookie, req, {
+            write(content) {
+                state.resStarted = true;
+                res.write(`data: ${JSON.stringify(openaiToken(content))}\n\n`);
+            },
+            end() {
+                state.resStarted = true;
+                res.write(`data: [DONE]\n\n`);
+                res.end();
+            },
+            on: res.on,
+            error(code, msg) {
                 if (!state.resStarted) {
-                    if (jsonObj.error?.code) {
-                        const code = jsonObj.error.code;
-                        if (code === 16 || code === 3) {
-                            console.log('\x1B[31mThis cookie is invalid\x1B[0m');
-                        } else {
-                            console.log('\x1B[31mUnknown error:\x1B[0m');
-                            console.log(`\x1B[31m${line}\x1B[0m`);
-                        }
-
-                        res.status(500).send('Internal error');
-                        state.resStarted = true;
-                        return;
-                    }
-                }
-
-                if (jsonObj.result?.response?.token) {
+                    res.status(code).send(msg);
                     state.resStarted = true;
-                    res.write(`data: ${JSON.stringify(openaiToken(jsonObj.result.response.token))}\n\n`);
+                } else {
+                    res.end();
                 }
-            } catch (e) {
-                // 可以选择记录错误日志
-                continue;
-            }
-        }
-    });
-
-    stream.on('end', () => {
-        console.log('\x1B[2mStream response finished\x1B[0m');
-        res.write('data: [DONE]\n\n');
-        res.end();
-    });
+            },
+        });
+    } else {
+        let output = '';
+        callGrokToStream(cookie.cookie, req, {
+            write(content) {
+                output += content;
+            },
+            end() {
+                res.send({
+                    choices: [
+                        {
+                            message: {
+                                role: 'assistant',
+                                content: output,
+                            },
+                        },
+                    ],
+                });
+                state.resStarted = true;
+            },
+            on: res.on,
+            error(code, msg) {
+                res.status(code).send(msg);
+                state.resStarted = true;
+            },
+        });
+    }
 };
