@@ -22,8 +22,9 @@ app.post('/v1/chat/completions', async (req, res) => {
             if (e.code) {
                 console.log(`\x1B[31mcode: ${e.code}\x1B[0m`);
             }
+        } else {
+            console.log(e);
         }
-        console.log(e);
         if (!state.resStarted) {
             res.status(500).send('Internal error');
         } else {

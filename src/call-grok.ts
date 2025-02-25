@@ -157,7 +157,7 @@ export const callGrok = async (req: Request, res: Response, state: { resStarted:
     console.log(`\x1B[32mUsing cookie \x1B[36m"${cookie.name}"\x1B[0m`);
 
     if (req.body.stream) {
-        callGrokToStream(cookie.cookie, req, {
+        await callGrokToStream(cookie.cookie, req, {
             write(content) {
                 state.resStarted = true;
                 res.write(`data: ${JSON.stringify(openaiToken(content))}\n\n`);
@@ -179,7 +179,7 @@ export const callGrok = async (req: Request, res: Response, state: { resStarted:
         });
     } else {
         let output = '';
-        callGrokToStream(cookie.cookie, req, {
+        await callGrokToStream(cookie.cookie, req, {
             write(content) {
                 output += content;
             },
