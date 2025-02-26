@@ -106,6 +106,14 @@ export interface NamedCookie {
     name: string;
 }
 
+const formatCookie = (content: string) => {
+    const match = /^\s*(.*?)\s*$/s.exec(content);
+    if (!match) {
+        throw new Error();
+    }
+    return match[1];
+};
+
 export const createCookiePool = () => {
     const cookieDir = path.resolve(dataDir, 'cookies');
     const pool = new CookiePool<NamedCookie>({}, config.cookieQuota, config.quotaRefreshTime);
@@ -120,7 +128,8 @@ export const createCookiePool = () => {
             console.log(`\n\x1B[36m[${new Date().toLocaleString()}] Detected new cookie file ${fileName}\x1B[0m`);
             const content = fs.readFileSync(fullPath).toString();
             try {
-                pool.addCookie(cookieName, { cookie: content, name: cookieName });
+                const cookie = formatCookie(content);
+                pool.addCookie(cookieName, { cookie, name: cookieName });
             } catch (e) {
                 console.log('\x1B[31mThis cookie file is broken, skipped\x1B[0m');
             }
@@ -128,7 +137,8 @@ export const createCookiePool = () => {
             console.log(`\n\x1B[36m[${new Date().toLocaleString()}] Detected changed cookie file ${fileName}\x1B[0m`);
             const content = fs.readFileSync(fullPath).toString();
             try {
-                pool.addCookie(cookieName, { cookie: content, name: cookieName });
+                const cookie = formatCookie(content);
+                pool.addCookie(cookieName, { cookie, name: cookieName });
             } catch (e) {
                 console.log('\x1B[31mThis cookie file is broken, skipped\x1B[0m');
                 pool.removeCookie(cookieName);
