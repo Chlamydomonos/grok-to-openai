@@ -3,6 +3,7 @@ import type { Request, Response } from 'express';
 import { createCookiePool, type NamedCookie } from './cookie-pool';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import { config } from './config';
+import { handleTestMessage } from './handle-test-message';
 
 const grokUrl = 'https://grok.com/rest/app-chat/conversations/new';
 
@@ -15,10 +16,13 @@ const axiosInstance = config.useHttpProxy
 const cookiePool = createCookiePool();
 
 const grokBody = (req: Request) => {
-    const reqMessages = req.body.messages as {
-        role: string;
-        content: string;
-    }[];
+    const reqMessages =
+        (req.body.messages as
+            | {
+                  role: string;
+                  content: string;
+              }[]
+            | undefined) ?? [];
     const reqMessageText = reqMessages.map((m) => `${m.role}:\n\n${m.content}`).join('\n\n');
     return {
         temporary: true,
@@ -113,6 +117,10 @@ const callGrokToStream = async (cookie: string, req: Request, res: Writeable) =>
 
 export const callGrok = async (req: Request, res: Response, state: { resStarted: boolean }) => {
     console.log(`\n\x1B[36m[${new Date().toLocaleString()}] Request received\x1B[0m`);
+
+    if (handleTestMessage(req, res, state)) {
+        return;
+    }
 
     const authorization = req.headers.authorization;
     let cookie: NamedCookie | undefined;
