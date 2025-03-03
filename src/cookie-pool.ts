@@ -107,11 +107,12 @@ export interface NamedCookie {
 }
 
 const formatCookie = (content: string) => {
-    const match = /^\s*(.*?)\s*$/s.exec(content);
+    const match = /sso=(\S*)(?:;|$)/s.exec(content);
     if (!match) {
         throw new Error();
     }
-    return match[1];
+    const sso = match[1];
+    return `sso=${sso}; sso-rw=${sso};`;
 };
 
 export const createCookiePool = () => {

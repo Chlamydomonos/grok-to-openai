@@ -23,7 +23,12 @@ const grokBody = (req: Request) => {
                   content: string;
               }[]
             | undefined) ?? [];
-    const reqMessageText = reqMessages.map((m) => `${m.role}:\n\n${m.content}`).join('\n\n');
+    const reqMessageText = reqMessages
+        .map((m) => {
+            const role = config.roles[m.role] ?? m.role;
+            return `${role}:\n\n${m.content}`;
+        })
+        .join('\n\n');
     return {
         temporary: true,
         modelName: 'grok-3',
@@ -115,6 +120,24 @@ const callGrokToStream = async (cookie: string, req: Request, res: Writeable) =>
     });
 };
 
+const formatCustomCookie = (customCookie: string) => {
+    if (/^\s*sso=/.test(customCookie)) {
+        const match = /sso=(\S*?)(?:;|\s*$)/.exec(customCookie);
+        if (!match) {
+            return undefined;
+        }
+        const sso = match[1];
+        return { name: sso, cookie: `sso=${sso}; sso-rw=${sso};` };
+    } else {
+        const match = /^\s*(\S*?)(?:;|\s*$)/.exec(customCookie);
+        if (!match) {
+            return undefined;
+        }
+        const sso = match[1];
+        return { name: sso, cookie: `sso=${sso}; sso-rw=${sso};` };
+    }
+};
+
 export const callGrok = async (req: Request, res: Response, state: { resStarted: boolean }) => {
     console.log(`\n\x1B[36m[${new Date().toLocaleString()}] Request received\x1B[0m`);
 
@@ -125,39 +148,61 @@ export const callGrok = async (req: Request, res: Response, state: { resStarted:
     const authorization = req.headers.authorization;
     let cookie: NamedCookie | undefined;
     if (authorization) {
-        const match = /^Bearer (.+)/.exec(authorization);
-        if (match) {
-            const cookieName = match[1];
-            console.log(`Trying to use cookie ${cookieName}`);
-            if (cookiePool.has(cookieName)) {
-                cookie = cookiePool.getCookie(cookieName);
-                if (!cookie) {
-                    console.log('\x1B[31mNo quota for this cookie, aborted request\x1B[0m');
+        do {
+            const match = /^Bearer (.+)/.exec(authorization);
+            if (match) {
+                const cookieName = match[1];
+                console.log(`Trying to use cookie ${cookieName}`);
+                if (config.customCookieMode) {
+                    cookie = formatCustomCookie(cookieName);
+                    break;
+                }
+
+                if (cookiePool.has(cookieName)) {
+                    cookie = cookiePool.getCookie(cookieName);
+                    if (!cookie) {
+                        console.log('\x1B[31mNo quota for this cookie, aborted request\x1B[0m');
+                    }
+                } else {
+                    console.log('\x1B[33mThis cookie does not exist, trying to use a random cookie\x1B[0m');
+                    cookie = cookiePool.getRandom();
+                    if (!cookie) {
+                        console.log('\x1B[31mNo cookie available, aborted request\x1B[0m');
+                    }
                 }
             } else {
-                console.log('\x1B[33mThis cookie does not exist, trying to use a random cookie\x1B[0m');
+                if (config.customCookieMode) {
+                    console.log('\x1B[31mNo cookie available, aborted request\x1B[0m');
+                    break;
+                }
+
+                console.log(`Trying to use a random cookie`);
                 cookie = cookiePool.getRandom();
                 if (!cookie) {
                     console.log('\x1B[31mNo cookie available, aborted request\x1B[0m');
                 }
             }
-        } else {
+        } while (false);
+    } else {
+        do {
+            if (config.customCookieMode) {
+                console.log('\x1B[31mNo cookie available, aborted request\x1B[0m');
+                break;
+            }
             console.log(`Trying to use a random cookie`);
             cookie = cookiePool.getRandom();
             if (!cookie) {
                 console.log('\x1B[31mNo cookie available, aborted request\x1B[0m');
             }
-        }
-    } else {
-        console.log(`Trying to use a random cookie`);
-        cookie = cookiePool.getRandom();
-        if (!cookie) {
-            console.log('\x1B[31mNo cookie available, aborted request\x1B[0m');
-        }
+        } while (false);
     }
 
     if (!cookie) {
-        res.status(429).send('Cookie已超出限额');
+        if (config.customCookieMode) {
+            res.status(400).send('Cookie格式错误');
+        } else {
+            res.status(429).send('Cookie已超出限额');
+        }
         state.resStarted = true;
         return;
     }

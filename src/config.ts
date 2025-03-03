@@ -8,6 +8,8 @@ type Config = {
     port: number;
     cookieQuota: number;
     quotaRefreshTime: number;
+    customCookieMode?: boolean;
+    roles: Record<string, boolean>;
 } & (
     | {
           useHttpProxy: true;
@@ -29,6 +31,9 @@ const checkConfig = (config: any): config is Config => {
         return false;
     }
     if (config.useHttpProxy && config.httpProxyUrl === undefined) {
+        return false;
+    }
+    if (config.roles === undefined) {
         return false;
     }
 
